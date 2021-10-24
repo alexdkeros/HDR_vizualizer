@@ -1,0 +1,553 @@
+<html>
+<head>
+	
+<!---------------------- JAVASCRIPT STUFF ----------------------------->
+<script>
+// Check for the various File API support.
+if (window.File && window.FileReader && window.FileList && window.Blob) {
+  // Great success! All the File APIs are supported.
+} else {
+  alert('The File APIs are not fully supported in this browser.');
+}
+</script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+
+
+<!-- Plotly.js -->
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<!-- Latest compiled JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+
+<script src="https://enkimute.github.io/res/hdrpng.min.js"></script>
+
+
+
+<!---------------------- JAVASCRIPT STUFF ----------------------------->
+
+
+<!---------------------- CSS STUFF ----------------------------->
+
+<link rel="stylesheet" href="css/zoom.css">
+
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+
+<link rel="stylesheet" href="css/visualize.css">
+
+<!---------------------- JAVASCRIPT STUFF ----------------------------->
+
+</head>
+<body>
+
+
+
+  <hr>
+<div style="text-align:center;">
+<input type="button" value="Clear selection" onclick="clearImgs()"> 
+<div style="clear: both;"></div>
+
+
+Exposure <div id="exposure-val"></div>
+<input min="-10" max="10" step="0.05" value="0.0" title="Exposure" oninput="adjExp(this.value)" type="range">
+
+Gamma <div id="gamma-val"></div>
+<input min="-10" max="10" step="0.05" value="0.0" title="Gamma" oninput="adjGamma(this.value)" type="range">
+
+</div>
+
+<div style="clear: both;"></div>
+
+
+<div class="split left">
+<h2>Reference image:</h2>
+<div class="centered">
+    <p>Drop image below</p>
+<div id="ref-container">
+
+</div>
+</div>
+</div>
+
+
+<div class="split right">
+<h2>Carousel - test images:</h2>
+<div class="centered">
+<p>Drop images below</p>
+<div id="carousel-container">
+<div id="show" class="carousel" data-ride="carousel">
+  <!-- Wrapper for slides -->
+  <div class="carousel-inner">
+
+  </div>
+  <!-- Left and right controls -->
+  <a class="left carousel-control" href="#show" data-slide="prev">
+    <span class="glyphicon glyphicon-chevron-left"></span>
+    <span class="sr-only">Previous</span>
+  </a>
+  <a class="right carousel-control" href="#show" data-slide="next">
+    <span class="glyphicon glyphicon-chevron-right"></span>
+    <span class="sr-only">Next</span>
+  </a>
+</div>
+
+</div>
+</div>
+</div>
+
+<div style="clear: both;"></div>
+
+
+<hr>
+
+
+<h2>Zoom & Error:</h2>
+
+<div class="split-zoom left-zoom">
+
+<div class="img-zoom-container-imgs">
+  
+</div>
+</div>
+
+<div class="split-zoom right-zoom">
+  <div id="pixel-coord"></div>
+  <div class="grid-container img-zoom-container-zooms">
+  
+  </div>
+
+  <div id="l2ErrorPlot">
+  </div>
+
+
+  <div id="MantiukErrorPlot">
+  </div>
+
+
+</div>
+
+
+<!---------------------- JAVASCRIPT STUFF ----------------------------->
+
+<!-- file selection and select populating script -->
+<script type="text/javascript">
+
+
+
+
+
+    function adjExp(val){
+    var expCont=document.getElementById("exposure-val");
+    expCont.innerText=val;
+    var hdrImgs=document.getElementsByTagName("canvas");
+    for (let hdrI of hdrImgs){
+      hdrI.exposure=val;
+    }
+
+  }
+
+
+  function adjGamma(valu){
+    var gammaCont=document.getElementById("gamma-val");
+    gammaCont.innerText=valu;
+    var hdrImgs=document.getElementsByTagName("canvas");
+    for (let hdrI of hdrImgs){
+      hdrI.gamma=valu;
+    }
+  }
+
+ 
+ function clearImgs(){
+
+    var carouselCont=document.getElementsByClassName("carousel-inner")[0];
+    carouselCont.innerHTML="";
+
+    $('.img-zoom-container-imgs').empty();
+    $('.img-zoom-container-zooms').empty();
+
+ }
+
+
+  var carousel=document.getElementById("carousel-container");
+
+
+  carousel.ondragover = function(e) { e.preventDefault(); e.dataTransfer.dropEffect='link'; }
+
+
+  var selRefImg=new HDRImage();
+  carousel.ondrop = function(e) {
+
+    e.preventDefault(); e.stopPropagation(); 
+
+
+    var carouselCont=document.getElementsByClassName("carousel-inner")[0];
+    
+    
+    var active=true;
+
+    for (let opt of e.dataTransfer.files){
+
+      var selDiv=document.createElement('div');
+      var selImg=new HDRImage();
+
+      if (active & document.getElementsByClassName("item").length==0){
+        selDiv.setAttribute("class","item active");
+        active=false;
+      }else{
+        selDiv.setAttribute("class","item");
+      }
+      selImg.src=URL.createObjectURL(opt)+'#'+opt.name; 
+      selRefImg.src=selImg.src;
+      var captDiv=document.createElement('div');
+      captDiv.setAttribute("class","carousel-caption");
+      captDiv.innerHTML=['<p>',escape(opt.name.split('.').slice(0, -1).join('.')),'</p>'].join('');
+      carouselCont.append(selDiv);
+      selDiv.appendChild(selImg);
+      selDiv.appendChild(captDiv);
+
+    
+    }
+
+    $('.carousel').carousel();
+  
+
+    zoom();
+  }
+
+  selRefImg.onload=function(){
+    $(".carousel-inner").css({"height":selRefImg.height, "width":selRefImg.width});
+  }
+
+
+  var refCont = document.getElementById("ref-container");
+  var refFig = document.createElement('figure');
+  var refImg=new HDRImage();
+  var figCapt=document.createElement('figcaption');
+  figCapt.setAttribute("class", "carousel-caption");
+  refImg.setAttribute("id", "refImg");
+  refFig.appendChild(refImg);
+  refCont.appendChild(refFig);
+  refCont.appendChild(figCapt);
+  refCont.ondragover = function(e) { e.preventDefault(); e.dataTransfer.dropEffect='link'; }
+  refCont.ondrop = function(e) {
+    e.preventDefault(); e.stopPropagation(); 
+    
+    refImg.src = URL.createObjectURL(e.dataTransfer.files[0])+'#'+e.dataTransfer.files[0].name; 
+    figCapt.innerText=escape(e.dataTransfer.files[0].name.split('.').slice(0, -1).join('.'));
+
+  }
+
+  refImg.onload=function(){
+    refCont.style.height=refImg.height;
+    refCont.style.width=refImg.width;
+    zoom();
+  }
+
+
+
+
+
+
+
+function zoom(){
+
+
+  var refImg=document.getElementById('refImg');
+  var selected=document.getElementsByClassName('item');
+
+
+
+  $('.img-zoom-container-imgs').empty();
+  $('.img-zoom-container-zooms').empty();
+
+  
+  if (refImg){
+
+    var refImgUrl=refImg.toDataURL();
+    refImgZoom=new Image();
+    refImgZoom.src=refImgUrl;
+    refImgZoom.setAttribute("id", "refImg-zoom");
+    refImgZoom.setAttribute("class", "zoomed-image");
+  
+    var refImgZoomContainer=document.createElement("div");
+    refImgZoomContainer.id="ref-img-zoom-container";
+    $('.img-zoom-container-imgs').append(refImgZoomContainer);
+    $("#ref-img-zoom-container").append(refImgZoom);
+  
+  var refZoomDiv=document.createElement('div');
+  refZoomDiv.setAttribute("class", "img-zoom-result");
+  refZoomDiv.setAttribute("id","ref-zoom");
+  refZoomDiv.innerHTML=["reference"];
+  $(".img-zoom-container-zooms").append(refZoomDiv);
+  imageZoom("refImg-zoom", "ref-zoom", true); 
+  }
+
+
+  for (let opt of selected){
+    // selImgUrls.push(opt.childNodes[0].toDataURL());
+
+    if (opt.getAttribute("loaded")!=1){
+    opt.childNodes[0].onload=function(){
+    opt.childNodes[0].toBlob(function(blob) {
+
+
+            var selImg=new Image();
+            url = URL.createObjectURL(blob);
+            selImg.src=url;
+
+            selImg.setAttribute("class", "zoomed-image");
+            selImg.setAttribute("id",[opt.childNodes[1].innerText, "-img"].join(''));
+            // selImg.setAttribute("style", "width:30%");   //TODO: TO CHANGE TO NORMAL SIZE
+
+            var zoomDiv=document.createElement('div');
+            zoomDiv.setAttribute("class", "img-zoom-result");
+            zoomDiv.innerHTML=[opt.childNodes[1].innerText];
+            zoomDiv.setAttribute("id",[opt.childNodes[1].innerText, "-zoom"].join(''));
+
+            selImg.onload=function(){
+                $(".img-zoom-container-imgs").append(selImg);
+                $(".img-zoom-container-zooms").append(zoomDiv);
+
+
+                imageZoom([opt.childNodes[1].innerText, "-img"].join(''), [opt.childNodes[1].innerText, "-zoom"].join(''), false); 
+            }
+
+          opt.setAttribute("loaded",1);  
+    });}
+  }else{
+    opt.childNodes[0].toBlob(function(blob) {
+
+
+            var selImg=new Image();
+            url = URL.createObjectURL(blob);
+            selImg.src=url;
+
+            selImg.setAttribute("class", "zoomed-image");
+            selImg.setAttribute("id",[opt.childNodes[1].innerText, "-img"].join(''));
+            // selImg.setAttribute("style", "width:30%");   //TODO: TO CHANGE TO NORMAL SIZE
+
+            var zoomDiv=document.createElement('div');
+            zoomDiv.setAttribute("class", "img-zoom-result");
+            zoomDiv.innerHTML=[opt.childNodes[1].innerText];
+            zoomDiv.setAttribute("id",[opt.childNodes[1].innerText, "-zoom"].join(''));
+
+            selImg.onload=function(){
+                $(".img-zoom-container-imgs").append(selImg);
+                $(".img-zoom-container-zooms").append(zoomDiv);
+
+
+                imageZoom([opt.childNodes[1].innerText, "-img"].join(''), [opt.childNodes[1].innerText, "-zoom"].join(''), false); 
+            }
+
+          opt.setAttribute("loaded",1);  
+    });
+  }
+
+  }
+
+
+
+}
+
+
+
+
+
+
+
+
+function imageZoom(imgID, resultID, isref) {
+
+  var img, lens, result, cx, cy;
+  img = document.getElementById(imgID);
+  result = document.getElementById(resultID);
+  /* Create lens: */
+  lens = document.createElement("DIV");
+  lens.setAttribute("class", "img-zoom-lens");
+
+  if (isref==false){
+    lens.setAttribute("style", "visibility: hidden");
+  }
+  /* Insert lens: */
+  img.parentElement.insertBefore(lens, img);
+  /* Calculate the ratio between result DIV and lens: */
+  cx = result.offsetWidth / lens.offsetWidth;
+  cy = result.offsetHeight / lens.offsetHeight;
+  /* Set background properties for the result DIV */
+  result.style.backgroundImage = "url('" + img.src + "')";
+  result.style.backgroundSize = (img.width * cx) + "px " + (img.height * cy) + "px";
+  /* Execute a function when someone moves the cursor over the image, or the lens: */
+  lens.addEventListener("mousemove", moveLens);
+  img.addEventListener("mousemove", moveLens);
+
+  /* And also for touch screens: */
+  lens.addEventListener("touchmove", moveLens);
+  img.addEventListener("touchmove", moveLens);
+
+  function moveLens(e) {
+
+    var pos, x, y;
+    /* Prevent any other actions that may occur when moving over the image */
+    e.preventDefault();
+    /* Get the cursor's x and y positions: */
+    pos = getCursorPos(e);
+    /* Calculate the position of the lens: */
+    
+  lenses=document.getElementsByClassName("img-zoom-lens");
+  for (let lens of lenses){
+      x = pos.x - (lens.offsetWidth / 2);
+      y = pos.y + (lens.offsetHeight / 2);
+      // /* Prevent the lens from being positioned outside the image: */
+      if (x > img.width - lens.offsetWidth) {x = img.width - lens.offsetWidth;}
+       if (x < 0) {x = 0;}
+      if (y > img.height) {y = img.height;}
+       if (y < lens.offsetHeight) {y = lens.offsetHeight;}
+      /* Set the position of the lens: */
+
+      lens.style.left = x + "px";
+      lens.style.top = y + "px";
+
+  }
+  results=document.getElementsByClassName("img-zoom-result");
+  for (let result of results){
+      /* Display what the lens "sees": */
+      result.style.backgroundPosition = "-" + (x * cx) + "px -" + ((y- (lens.offsetHeight)) * cy) + "px";
+  }
+
+
+
+  errorBars({x:Math.floor(x), y: Math.floor(y-lens.offsetHeight)}, {lw: lens.offsetWidth, lh: lens.offsetHeight});
+
+
+  }
+  function getCursorPos(e) {
+    var a, x = 0, y = 0;
+    e = e || window.event;
+    /* Get the x and y positions of the image: */
+    
+
+    a = img.getBoundingClientRect();
+    /* Calculate the cursor's x and y coordinates, relative to the image: */
+    x = e.pageX - a.left;
+    y = e.pageY - a.top;
+    /* Consider any page scrolling: */
+    x = x - window.pageXOffset;
+    y = y - window.pageYOffset;
+    return {x : x, y : y};
+  }
+
+
+}
+
+
+
+  function errorBars(pos,ofs){
+
+    var pixelCoords=document.getElementById("pixel-coord");
+    pixelCoords.innerText="Pixel region:("+pos.x+"+"+ofs.lw+","+pos.y+"+"+ofs.lh+")";
+
+    var refImg=document.getElementById('refImg');
+    var selected=document.getElementsByClassName('item');
+
+
+    var refData=refImg.dataFloat;
+    //refimg rgb values
+    
+    var refRads=[];
+    for (var i=pos.x; i<pos.x+ofs.lw; i++){
+      for (var j=pos.y; j<pos.y+ofs.lh; j++){
+        refRads.push(getPixelFloat(refData, refImg.width, refImg.height, i, j));
+      }
+    }
+
+
+    var l2Traces=[];
+    var mantiukTraces=[];
+
+    for (let sel of selected){
+      var selImg=sel.childNodes[0];
+      var selData=selImg.dataFloat;
+      var selImgName=sel.childNodes[1].innerText;
+
+      var selRads=[];
+      for (var i=pos.x; i<pos.x+ofs.lw; i++){
+        for (var j=pos.y; j<pos.y+ofs.lh; j++){
+          selRads.push(getPixelFloat(selData, selImg.width, selImg.height, i, j));
+        }
+      }
+
+    
+
+      var L2norms=[];
+      var MSE=[];
+      for (var i=0; i<selRads.length;i++){
+        L2norms.push(Math.pow( Math.abs( refRads[i].r-selRads[i].r) , 2) + Math.pow( Math.abs( refRads[i].g-selRads[i].g) , 2) + Math.pow( Math.abs( refRads[i].b-selRads[i].b) , 2));
+      
+        var refLum=0.2126*refRads[i].r + 0.7152*refRads[i].g +0.0722*refRads[i].b;
+
+        var selLum=0.2126*selRads[i].r + 0.7152*selRads[i].g +0.0722*selRads[i].b;
+
+
+        MSE.push(Math.pow(Math.log10(refLum)-Math.log10(selLum) ,2));
+
+       }
+
+      var mantiukTrace={y:MSE, type:'box', name:selImgName, boxmean: 'sd' , boxpoints: false};
+
+      mantiukTraces.push(mantiukTrace);
+
+      var l2Trace = {y:L2norms, type:'box', name:selImgName, boxmean: 'sd' , boxpoints: false};
+
+      l2Traces.push(l2Trace);
+    }
+
+
+
+    var l2layout = {
+          title:{text:"L2 norm"},
+          xaxis:{showticklabels: false},
+      	  yaxis: {
+    			type: 'log',
+    			autorange: true}};
+
+    var mantiuklayout = {
+          title:{text:"Luminance MSE"},
+          xaxis:{showticklabels: false},
+          yaxis: {
+    			type: 'log',
+    			autorange: true}};
+
+        
+
+    Plotly.newPlot("l2ErrorPlot",l2Traces, l2layout);
+
+    Plotly.newPlot("MantiukErrorPlot", mantiukTraces, mantiuklayout);
+
+
+
+
+   function getPixelFloat(data, width, height, x, y){
+      var i = (Math.round(x) + Math.round(y) * width) * 3;
+      return {
+        r: data[i],
+        g: data[i+1],
+        b: data[i+2],
+      };
+    }
+
+  } 
+
+
+
+
+
+</script>
+
+
+
+
+<!---------------------- JAVASCRIPT STUFF END----------------------------->
+</body>
+</html>
